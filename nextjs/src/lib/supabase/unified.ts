@@ -87,11 +87,11 @@ export class SassClient {
     }
 
     async removeTask (id: string) {
-        return this.client.from('todo_list').delete().eq('id', id)
+        return this.client.from('todo_list').delete().eq('id', parseInt(id))
     }
 
     async updateAsDone (id: string) {
-        return this.client.from('todo_list').update({done: true}).eq('id', id)
+        return this.client.from('todo_list').update({ done: true }).eq('id', parseInt(id))
     }
 
     getSupabaseClient() {
