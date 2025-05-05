@@ -93,7 +93,7 @@ export default function FileManagementPage() {
         if (files.length > 0) {
             handleFileUpload(files[0]);
         }
-    }, []);
+    }, [handleFileUpload]);
 
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {

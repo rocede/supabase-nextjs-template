@@ -10,7 +10,6 @@ export default function TwoFactorAuthPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [mfaEnabled, setMFAEnabled] = useState(false);
 
     const checkMFAStatus = useCallback(async () => {
         try {
@@ -25,14 +24,16 @@ export default function TwoFactorAuthPage() {
                 factor.status === 'verified'
             );
 
-            setMFAEnabled(hasEnabledTOTP);
+            if (hasEnabledTOTP) {
+                router.push('/app');
+            }
         } catch (err) {
             console.error('Error checking MFA status:', err);
             setError(err instanceof Error ? err.message : 'Failed to check MFA status');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         checkMFAStatus();
@@ -59,8 +60,8 @@ export default function TwoFactorAuthPage() {
     }
 
     return (
-            <div className="w-full max-w-md">
-                <MFAVerification onVerified={handleVerified} />
-            </div>
+        <div className="w-full max-w-md">
+            <MFAVerification onVerified={handleVerified} />
+        </div>
     );
 }
