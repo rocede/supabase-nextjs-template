@@ -128,7 +128,6 @@ function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
 }
 
 export default function TaskManagementPage() {
-    const { user } = useGlobal();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
