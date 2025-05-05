@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useGlobal } from '@/lib/context/GlobalContext';
 import { createSPASassClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
