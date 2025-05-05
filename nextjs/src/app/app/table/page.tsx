@@ -28,7 +28,6 @@ interface CreateTaskDialogProps {
 }
 
 function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
-    const { user } = useGlobal();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
@@ -38,7 +37,7 @@ function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
 
     const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!newTaskTitle.trim() || !user?.id) return;
+        if (!newTaskTitle.trim()) return;
 
         try {
             setLoading(true);
@@ -47,7 +46,7 @@ function CreateTaskDialog({ onTaskCreated }: CreateTaskDialogProps) {
                 title: newTaskTitle.trim(),
                 description: newTaskDescription.trim() || null,
                 urgent: isUrgent,
-                owner: user.id,
+                owner: (await supabase.getSupabaseClient().auth.getUser()).data.user!.id,
                 done: false
             };
 

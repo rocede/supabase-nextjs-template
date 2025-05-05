@@ -54,14 +54,14 @@ export default function FileManagementPage() {
         loadFiles();
     }, [loadFiles]);
 
-    const handleFileUpload = async (file: File) => {
+    const handleFileUpload = useCallback(async (file: File) => {
         try {
             setUploading(true);
             setError('');
 
-            console.log(user)
+            if (!user?.id) return;
 
-            const { error } = await supabase.uploadFile(user!.id!, file.name, file);
+            const { error } = await supabase.uploadFile(user.id, file.name, file);
 
             if (error) throw error;
 
@@ -73,8 +73,7 @@ export default function FileManagementPage() {
         } finally {
             setUploading(false);
         }
-    };
-
+    }, [user, supabase, loadFiles]);
 
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const fileList = event.target.files;
@@ -82,7 +81,6 @@ export default function FileManagementPage() {
         handleFileUpload(fileList[0]);
         event.target.value = '';
     };
-
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -94,7 +92,6 @@ export default function FileManagementPage() {
             handleFileUpload(files[0]);
         }
     }, [handleFileUpload]);
-
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -112,7 +109,6 @@ export default function FileManagementPage() {
         e.preventDefault();
         e.stopPropagation();
     }, []);
-
 
     const handleDownload = async (filename: string) => {
         try {
