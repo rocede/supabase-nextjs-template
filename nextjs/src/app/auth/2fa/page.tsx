@@ -1,7 +1,7 @@
 // src/app/auth/2fa/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSPASassClient } from '@/lib/supabase/client';
 import { MFAVerification } from '@/components/MFAVerification';
@@ -10,37 +10,33 @@ export default function TwoFactorAuthPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [mfaEnabled, setMFAEnabled] = useState(false);
+
+    const checkMFAStatus = useCallback(async () => {
+        try {
+            setLoading(true);
+            const supabase = await createSPASassClient();
+            const { data, error } = await supabase.getSupabaseClient().auth.mfa.listFactors();
+
+            if (error) throw error;
+
+            const hasEnabledTOTP = data.all.some(factor => 
+                factor.factor_type === 'totp' && 
+                factor.status === 'verified'
+            );
+
+            setMFAEnabled(hasEnabledTOTP);
+        } catch (err) {
+            console.error('Error checking MFA status:', err);
+            setError(err instanceof Error ? err.message : 'Failed to check MFA status');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         checkMFAStatus();
-    }, []);
-
-    const checkMFAStatus = async () => {
-        try {
-            const supabase = await createSPASassClient();
-            const client = supabase.getSupabaseClient();
-
-            const { data: { user }, error: sessionError } = await client.auth.getUser();
-            if (sessionError || !user) {
-                router.push('/auth/login');
-                return;
-            }
-
-            const { data: aal, error: aalError } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
-
-            if (aalError) throw aalError;
-
-            if (aal.currentLevel === 'aal2' || aal.nextLevel === 'aal1') {
-                router.push('/app');
-                return;
-            }
-
-            setLoading(false);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'An error occurred');
-            setLoading(false);
-        }
-    };
+    }, [checkMFAStatus]);
 
     const handleVerified = () => {
         router.push('/app');

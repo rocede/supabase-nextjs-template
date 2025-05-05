@@ -26,28 +26,33 @@ export default function FileManagementPage() {
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
 
-    useEffect(() => {
-        if (user?.id) {
-            loadFiles();
-        }
-    }, [user]);
+    const supabase = createSPASassClient();
 
-    const loadFiles = async () => {
+    const loadFiles = useCallback(async () => {
+        if (!user?.id) return;
         try {
             setLoading(true);
-            setError('');
-            const supabase = await createSPASassClient();
-            const { data, error } = await supabase.getFiles(user!.id);
+            const { data: { publicUrl }, error } = await supabase
+                .storage
+                .from('avatars')
+                .getPublicUrl(user.id);
 
-            if (error) throw error;
-            setFiles(data || []);
-        } catch (err) {
-            setError('Failed to load files');
-            console.error('Error loading files:', err);
+            if (error) {
+                throw error;
+            }
+
+            setFiles([{ name: 'avatar.png', url: publicUrl }]);
+        } catch (error) {
+            console.error('Error loading files:', error);
+            setError('Error loading files');
         } finally {
             setLoading(false);
         }
-    };
+    }, [user, supabase]);
+
+    useEffect(() => {
+        loadFiles();
+    }, [loadFiles]);
 
     const handleFileUpload = async (file: File) => {
         try {
@@ -56,7 +61,6 @@ export default function FileManagementPage() {
 
             console.log(user)
 
-            const supabase = await createSPASassClient();
             const { error } = await supabase.uploadFile(user!.id!, file.name, file);
 
             if (error) throw error;
@@ -113,7 +117,6 @@ export default function FileManagementPage() {
     const handleDownload = async (filename: string) => {
         try {
             setError('');
-            const supabase = await createSPASassClient();
             const { data, error } = await supabase.shareFile(user!.id!, filename, 60, true);
 
             if (error) throw error;
@@ -128,7 +131,6 @@ export default function FileManagementPage() {
     const handleShare = async (filename: string) => {
         try {
             setError('');
-            const supabase = await createSPASassClient();
             const { data, error } = await supabase.shareFile(user!.id!, filename, 24 * 60 * 60);
 
             if (error) throw error;
@@ -146,7 +148,6 @@ export default function FileManagementPage() {
 
         try {
             setError('');
-            const supabase = await createSPASassClient();
             const { error } = await supabase.deleteFile(user!.id!, fileToDelete);
 
             if (error) throw error;
@@ -180,7 +181,6 @@ export default function FileManagementPage() {
             setSelectedFile(filename);
             
             // Get a signed URL for the file
-            const supabase = await createSPASassClient();
             const { data: urlData, error: urlError } = await supabase.shareFile(user!.id!, filename, 60);
             
             if (urlError) throw urlError;

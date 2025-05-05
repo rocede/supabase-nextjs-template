@@ -138,10 +138,8 @@ export default function TaskManagementPage() {
     const [showConfetti, setShowConfetti] = useState<boolean>(false);
 
     useEffect(() => {
-        if (user?.id) {
-            loadTasks();
-        }
-    }, [filter, user?.id]);
+        loadTasks();
+    }, [loadTasks]);
 
     const loadTasks = async (): Promise<void> => {
         try {
