@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, Download, Share2, Trash2, Loader2, FileIcon, AlertCircle, CheckCircle, Copy } from 'lucide-react';
+import { Upload, Download, Share2, Trash2, Loader2, FileIcon, AlertCircle, CheckCircle, Copy, Brain } from 'lucide-react';
 import { createSPASassClient } from '@/lib/supabase/client';
 import { FileObject } from '@supabase/storage-js';
 
@@ -22,6 +22,9 @@ export default function FileManagementPage() {
     const [fileToDelete, setFileToDelete] = useState<string | null>(null);
     const [showCopiedMessage, setShowCopiedMessage] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [processingLlamaIndex, setProcessingLlamaIndex] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+    const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
 
     useEffect(() => {
         if (user?.id) {
@@ -170,6 +173,58 @@ export default function FileManagementPage() {
         }
     };
 
+    const sendToLlamaIndex = async (filename: string) => {
+        try {
+            setProcessingLlamaIndex(true);
+            setError('');
+            setSelectedFile(filename);
+            
+            // Get a signed URL for the file
+            const supabase = await createSPASassClient();
+            const { data: urlData, error: urlError } = await supabase.shareFile(user!.id!, filename, 60);
+            
+            if (urlError) throw urlError;
+            
+            console.log('Sending request to LlamaIndex API with URL:', urlData.signedUrl);
+            
+            // Send the signed URL to the LlamaIndex API
+            const response = await fetch('http://localhost:8000/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: `Process and analyze this document: ${urlData.signedUrl}`,
+                }),
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                console.error('LlamaIndex API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorData
+                });
+                throw new Error(
+                    `LlamaIndex API Error (${response.status}): ${
+                        errorData?.detail || response.statusText
+                    }`
+                );
+            }
+            
+            const result = await response.json();
+            console.log('LlamaIndex API Response:', result);
+            setSuccess('Document processed successfully by LlamaIndex');
+            setAnalysisResult(result.response);
+            setShowAnalysisDialog(true);
+            
+        } catch (err) {
+            console.error('Error processing document:', err);
+            setError(err instanceof Error ? err.message : 'Failed to process document with LlamaIndex');
+        } finally {
+            setProcessingLlamaIndex(false);
+        }
+    };
 
     return (
         <div className="space-y-6 p-6">
@@ -241,29 +296,39 @@ export default function FileManagementPage() {
                                         <span className="font-medium">{file.name.split('/').pop()}</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
+                                        {processingLlamaIndex && selectedFile === file.name && (
+                                            <Loader2 className="w-5 h-5 animate-spin text-blue-600"/>
+                                        )}
+                                        {file.name.toLowerCase().endsWith('.pdf') && (
+                                            <button
+                                                onClick={() => sendToLlamaIndex(file.name)}
+                                                disabled={processingLlamaIndex}
+                                                className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
+                                                title="Process with LlamaIndex"
+                                            >
+                                                <Brain className="w-5 h-5"/>
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleDownload(file.name)}
-                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                                            title="Download"
+                                            className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-full transition-colors"
                                         >
-                                            <Download className="h-5 w-5"/>
+                                            <Download className="w-5 h-5"/>
                                         </button>
                                         <button
                                             onClick={() => handleShare(file.name)}
-                                            className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                                            title="Share"
+                                            className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-full transition-colors"
                                         >
-                                            <Share2 className="h-5 w-5"/>
+                                            <Share2 className="w-5 h-5"/>
                                         </button>
                                         <button
                                             onClick={() => {
                                                 setFileToDelete(file.name);
                                                 setShowDeleteDialog(true);
                                             }}
-                                            className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                                            title="Delete"
+                                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
                                         >
-                                            <Trash2 className="h-5 w-5"/>
+                                            <Trash2 className="w-5 h-5"/>
                                         </button>
                                     </div>
                                 </div>
@@ -325,6 +390,29 @@ export default function FileManagementPage() {
                     </AlertDialog>
                 </CardContent>
             </Card>
+
+            {/* Analysis Results Dialog */}
+            <Dialog open={showAnalysisDialog} onOpenChange={setShowAnalysisDialog}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Document Analysis Results</DialogTitle>
+                        <DialogDescription>
+                            Analysis of {selectedFile?.split('/').pop()}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 space-y-4">
+                        {analysisResult && (
+                            <div className="prose prose-sm max-w-none">
+                                {analysisResult.split('\n').map((line, index) => (
+                                    <p key={index} className="mb-2">
+                                        {line}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
