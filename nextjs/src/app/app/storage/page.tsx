@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Upload, Download, Share2, Trash2, Loader2, FileIcon, AlertCircle, CheckCircle, Copy, Brain } from 'lucide-react';
 import { createSPASassClient } from '@/lib/supabase/client';
 import { FileObject } from '@supabase/storage-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export default function FileManagementPage() {
     const { user } = useGlobal();
@@ -25,23 +26,30 @@ export default function FileManagementPage() {
     const [processingLlamaIndex, setProcessingLlamaIndex] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
+    const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
 
-    const supabase = createSPASassClient();
+    useEffect(() => {
+        const initSupabase = async () => {
+            const client = await createSPASassClient();
+            setSupabase(client.getSupabaseClient());
+        };
+        initSupabase();
+    }, []);
 
     const loadFiles = useCallback(async () => {
-        if (!user?.id) return;
+        if (!user?.id || !supabase) return;
         try {
             setLoading(true);
-            const { data: { publicUrl }, error } = await supabase
+            const { data, error } = await supabase
                 .storage
                 .from('avatars')
-                .getPublicUrl(user.id);
+                .list(user.id);
 
             if (error) {
                 throw error;
             }
 
-            setFiles([{ name: 'avatar.png', url: publicUrl }]);
+            setFiles(data || []);
         } catch (error) {
             console.error('Error loading files:', error);
             setError('Error loading files');
@@ -55,13 +63,15 @@ export default function FileManagementPage() {
     }, [loadFiles]);
 
     const handleFileUpload = useCallback(async (file: File) => {
+        if (!user?.id || !supabase) return;
         try {
             setUploading(true);
             setError('');
 
-            if (!user?.id) return;
-
-            const { error } = await supabase.uploadFile(user.id, file.name, file);
+            const { error } = await supabase
+                .storage
+                .from('avatars')
+                .upload(`${user.id}/${file.name}`, file);
 
             if (error) throw error;
 
@@ -111,13 +121,18 @@ export default function FileManagementPage() {
     }, []);
 
     const handleDownload = async (filename: string) => {
+        if (!user?.id || !supabase) return;
         try {
             setError('');
-            const { data, error } = await supabase.shareFile(user!.id!, filename, 60, true);
+            const { data, error } = await supabase
+                .storage
+                .from('avatars')
+                .createSignedUrl(`${user.id}/${filename}`, 60);
 
             if (error) throw error;
-
-            window.open(data.signedUrl, '_blank');
+            if (data?.signedUrl) {
+                window.open(data.signedUrl, '_blank');
+            }
         } catch (err) {
             setError('Failed to download file');
             console.error('Error downloading file:', err);
@@ -125,14 +140,19 @@ export default function FileManagementPage() {
     };
 
     const handleShare = async (filename: string) => {
+        if (!user?.id || !supabase) return;
         try {
             setError('');
-            const { data, error } = await supabase.shareFile(user!.id!, filename, 24 * 60 * 60);
+            const { data, error } = await supabase
+                .storage
+                .from('avatars')
+                .createSignedUrl(`${user.id}/${filename}`, 24 * 60 * 60);
 
             if (error) throw error;
-
-            setShareUrl(data.signedUrl);
-            setSelectedFile(filename);
+            if (data?.signedUrl) {
+                setShareUrl(data.signedUrl);
+                setSelectedFile(filename);
+            }
         } catch (err) {
             setError('Failed to generate share link');
             console.error('Error sharing file:', err);
@@ -140,11 +160,14 @@ export default function FileManagementPage() {
     };
 
     const handleDelete = async () => {
-        if (!fileToDelete) return;
+        if (!fileToDelete || !user?.id || !supabase) return;
 
         try {
             setError('');
-            const { error } = await supabase.deleteFile(user!.id!, fileToDelete);
+            const { error } = await supabase
+                .storage
+                .from('avatars')
+                .remove([`${user.id}/${fileToDelete}`]);
 
             if (error) throw error;
 
@@ -171,26 +194,29 @@ export default function FileManagementPage() {
     };
 
     const sendToLlamaIndex = async (filename: string) => {
+        if (!user?.id || !supabase) return;
         try {
             setProcessingLlamaIndex(true);
             setError('');
             setSelectedFile(filename);
             
-            // Get a signed URL for the file
-            const { data: urlData, error: urlError } = await supabase.shareFile(user!.id!, filename, 60);
+            const { data, error } = await supabase
+                .storage
+                .from('avatars')
+                .createSignedUrl(`${user.id}/${filename}`, 60);
             
-            if (urlError) throw urlError;
+            if (error) throw error;
+            if (!data?.signedUrl) throw new Error('Failed to generate signed URL');
             
-            console.log('Sending request to LlamaIndex API with URL:', urlData.signedUrl);
+            console.log('Sending request to LlamaIndex API with URL:', data.signedUrl);
             
-            // Send the signed URL to the LlamaIndex API
             const response = await fetch('http://localhost:8000/query', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    query: `Process and analyze this document: ${urlData.signedUrl}`,
+                    query: `Process and analyze this document: ${data.signedUrl}`,
                 }),
             });
             
